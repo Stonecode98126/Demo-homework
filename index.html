@@ -82,20 +82,26 @@ dialog form{display:flex;flex-direction:column;gap:12px}
 .err{color:var(--accent);font-size:13px;font-weight:700;min-height:20px}
 .danger{min-height:44px;padding:0 14px;border:2px solid var(--accent);border-radius:8px;background:transparent;color:var(--accent);font-weight:700}
 @media (max-width:719px){
-  header{padding:12px 16px 10px}
-  h1{font-size:24px}
-  .tags{margin-left:0;flex-wrap:nowrap;overflow-x:auto;width:100%;order:9}
+  body{font-size:13px}
+  header{padding:6px 10px 4px;gap:4px 8px}
+  header>div:first-child{display:flex;align-items:baseline;gap:8px;margin-right:auto}
+  h1{font-size:16px}
+  #status{font-size:11px;min-height:0}
+  header .pill,header .primary{min-height:30px;padding:0 8px;font-size:12px;border-width:1.5px;border-radius:15px}
+  .tags{margin-left:0;flex-wrap:nowrap;overflow-x:auto;width:100%;order:9;gap:6px}
   .tags button{flex:none}
-  #panel{top:auto;left:8px;right:8px;bottom:8px;width:auto;max-width:none;height:58%}
+  #panel{top:auto;left:8px;right:8px;bottom:8px;width:auto;max-width:none;height:58%;padding:12px 14px 14px;gap:8px}
+  #panel h2{font-size:18px}
   .bar span{display:none}
-  .bar{padding:4px}
+  .bar{padding:3px;top:6px;left:8px;gap:6px}
+  .bar button{width:32px;height:32px;font-size:16px}
 }
 </style>
 </head>
 <body>
 <header>
   <div>
-    <h1>我們家的公佈欄</h1>
+    <h1>我們家的公布欄</h1>
     <div id="status" role="status" aria-live="polite">讀取中…</div>
   </div>
   <button type="button" class="pill" id="whoBtn">選擇我是誰</button>
@@ -204,7 +210,7 @@ function footText(t){
 }
 
 /* ---------- 便利貼貼圖 ---------- */
-var TW=640, PAD=44, CARD_W=2.6;
+var TW=640, PAD=44;
 function wrap(ctx,text,maxW,maxLines){
   var lines=[],cur='',src=String(text||'').replace(/\s+/g,' ');
   for(var i=0;i<src.length;i++){
@@ -219,7 +225,7 @@ function rr(ctx,x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,
 function drawCard(t,cv){
   cv=cv||document.createElement('canvas');
   var ctx=cv.getContext('2d'), inner=TW-PAD*2, tag=tagOf(t.tag_id), due=dueInfo(t);
-  ctx.font='700 52px '+FD; var tl=wrap(ctx,t.title,inner,2);
+  ctx.font='700 52px '+FD; var tW=ctx.measureText(t.title).width, mq=!reduce&&tW>inner, tl=mq?['']:wrap(ctx,t.title,inner,2);
   ctx.font='400 28px '+FB; var bl=wrap(ctx,t.body,inner,2);
   var H=56+44+18+tl.length*66+4+36+10+bl.length*40+(due?20+52:0)+20+36+34;
   cv.width=TW; cv.height=H; ctx=cv.getContext('2d');
@@ -244,7 +250,17 @@ function drawCard(t,cv){
     ctx.fillText(due.text,PAD+52,y+11,w-62); y+=52; ctx.fillStyle='#3A2E25'; ctx.strokeStyle='#3A2E25';
   }
   y+=20; ctx.font='500 26px '+FB; ctx.fillText(footText(t),PAD,y,inner);
+  cv._mq=mq?tW:0;
   return cv;
+}
+/* 標題太長時,用一條會捲動的貼圖當跑馬燈 */
+function makeStrip(t,tW,h,H){
+  var inner=TW-PAD*2, texW=Math.ceil(tW+140), sc=document.createElement('canvas'); sc.width=texW; sc.height=72;
+  var x=sc.getContext('2d'); x.font='700 52px '+FD; x.textBaseline='top'; x.fillStyle='#3A2E25'; x.fillText(t.title,0,4);
+  var tex=new THREE.CanvasTexture(sc); tex.encoding=THREE.sRGBEncoding; tex.wrapS=THREE.RepeatWrapping; tex.generateMipmaps=false; tex.minFilter=THREE.LinearFilter; tex.repeat.x=inner/texW;
+  var m=own(new THREE.Mesh(new THREE.PlaneGeometry(inner/TW*CW,72/TW*CW),new THREE.MeshBasicMaterial({map:tex,transparent:true,depthWrite:false})));
+  var yc=118+36, u=yc/H; m.position.set(0,h/2-yc/TW*CW,.02+.16*u*u+.015); m.renderOrder=2;
+  return {mesh:m,tex:tex,texW:texW};
 }
 function labelCanvas(text){
   var cv=document.createElement('canvas'); cv.width=512; cv.height=96; var ctx=cv.getContext('2d');
@@ -268,7 +284,7 @@ renderer.outputEncoding=THREE.sRGBEncoding;
 renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 var scene=new THREE.Scene(); scene.background=new THREE.Color(0xE6D7BC);
 var FOV=40, CAM_Z=10.4, camera=new THREE.PerspectiveCamera(FOV,1,.1,100); camera.position.set(0,0,CAM_Z);
-var COL_GAP=3.3, LEFT=-2.4, RIGHT=3*COL_GAP+2.4, BOARD_H=7.4;
+var GAP=3.3, CW=2.6, PER=2, LEFT=-2.4, RIGHT=3*3.3+2.4, BOARD_H=7.4;
 scene.add(new THREE.HemisphereLight(0xFFF6E6,0x9A7A55,.85));
 var sun=new THREE.DirectionalLight(0xFFE9C8,.65); sun.castShadow=true; sun.shadow.mapSize.set(4096,1024); sun.shadow.bias=-.0006; sun.shadow.radius=4;
 scene.add(sun); scene.add(sun.target);
@@ -290,15 +306,17 @@ function clearWorld(){
 function build(){
   var selId=selected>=0&&cards[selected]?cards[selected].t.topic_id:null;
   clearWorld(); hover=-1; selected=-1;
+  narrow=(stage.clientWidth||1)<720; CW=narrow?1.75:2.6; GAP=narrow?2.2:3.3; PER=narrow?3:2; LEFT=-(CW/2+1.1);
+  var k0=CW/2.6;
   /* 依日期分欄,新的在左;同一天超過兩張就往右多開一欄 */
   var cols=[], last=null, lastKey='';
   S.topics.forEach(function(t){
     var d=new Date(t.created_at); if(isNaN(d)) d=new Date();
     var key=dayStart(d)+'';
-    if(key!==lastKey||last.items.length>=2){ last={label:dayLabel(d),items:[]}; cols.push(last); lastKey=key; }
+    if(key!==lastKey||last.items.length>=PER){ last={label:dayLabel(d),items:[]}; cols.push(last); lastKey=key; }
     last.items.push(t);
   });
-  var n=Math.max(cols.length,4); RIGHT=(n-1)*COL_GAP+2.4;
+  var n=Math.max(cols.length,narrow?3:4); RIGHT=(n-1)*GAP+CW/2+1.1;
   var mid=(LEFT+RIGHT)/2, bw=RIGHT-LEFT;
   sun.position.set(mid-7,9,12); sun.target.position.set(mid,0,0);
   var sc=sun.shadow.camera; sc.left=-bw/2-3; sc.right=bw/2+3; sc.top=6; sc.bottom=-6; sc.near=1; sc.far=40; sc.updateProjectionMatrix();
@@ -313,26 +331,27 @@ function build(){
   var idx=0;
   cols.forEach(function(col,ci){
     var tex=new THREE.CanvasTexture(labelCanvas(col.label)); tex.encoding=THREE.sRGBEncoding; labels.push({tex:tex,text:col.label});
-    var lm=own(new THREE.Mesh(new THREE.PlaneGeometry(2.1,.39),new THREE.MeshStandardMaterial({map:tex,roughness:.9})));
-    lm.position.set(ci*COL_GAP,-3.38,.06); lm.castShadow=true; world.add(lm);
-    var tick=own(new THREE.Mesh(new THREE.BoxGeometry(.05,.3,.05),wood)); tick.position.set(ci*COL_GAP,-2.86,.05); world.add(tick);
+    var lm=own(new THREE.Mesh(new THREE.PlaneGeometry(2.1*GAP/3.3,.39*GAP/3.3),new THREE.MeshStandardMaterial({map:tex,roughness:.9})));
+    lm.position.set(ci*GAP,-3.38,.06); lm.castShadow=true; world.add(lm);
+    var tick=own(new THREE.Mesh(new THREE.BoxGeometry(.05,.3,.05),wood)); tick.position.set(ci*GAP,-2.86,.05); world.add(tick);
     var top=col.items.length===1?[2.5,3.0,1.9,2.7][ci%4]:3.05;
     col.items.forEach(function(t){
       var i=idx++, cv=drawCard(t), ctex=new THREE.CanvasTexture(cv); ctex.encoding=THREE.sRGBEncoding; ctex.anisotropy=aniso;
-      var h=cv.height/TW*CARD_W, geo=new THREE.PlaneGeometry(CARD_W,h,1,14), p=geo.attributes.position;
+      var h=cv.height/TW*CW, geo=new THREE.PlaneGeometry(CW,h,1,14), p=geo.attributes.position;
       for(var k=0;k<p.count;k++){ var u=(h/2-p.getY(k))/h; p.setZ(k,.02+.16*u*u); }
       geo.computeVertexNormals();
       var mat=new THREE.MeshStandardMaterial({map:ctex,roughness:.92,side:THREE.DoubleSide,transparent:true});
       var mesh=own(new THREE.Mesh(geo,mat)); mesh.position.y=-h/2+.12; mesh.castShadow=true; mesh.receiveShadow=true;
-      var pin=new THREE.Mesh(pinGeo,pinMat); pin.position.set(0,0,.1); pin.castShadow=true;
+      var pin=new THREE.Mesh(pinGeo,pinMat); pin.position.set(0,0,.1); pin.castShadow=true; pin.scale.setScalar(Math.max(k0,.75));
+      var strip=cv._mq?makeStrip(t,cv._mq,h,cv.height):null; if(strip) mesh.add(strip.mesh);
       var group=new THREE.Group(); group.add(mesh); group.add(pin);
-      var tilt=((i*37)%7-3)*.008, home=new THREE.Vector3(ci*COL_GAP+((i%2)?.12:-.1),top,.02);
-      top-=h+.4;
+      var tilt=((i*37)%7-3)*.008, home=new THREE.Vector3(ci*GAP+((i%2)?.12:-.1)*k0,top,.02);
+      top-=h+(narrow?.28:.4);
       group.position.copy(home); group.rotation.z=tilt; world.add(group);
       mesh.userData.card=cards.length; meshes.push(mesh);
       var isSel=t.topic_id===selId;
       if(isSel) selected=cards.length;
-      cards.push({t:t,group:group,mesh:mesh,mat:mat,tex:ctex,cv:cv,h:h,home:home,tilt:tilt,phase:i*1.7,lift:0,sel:isSel?1:0,dim:1});
+      cards.push({strip:strip,t:t,group:group,mesh:mesh,mat:mat,tex:ctex,cv:cv,h:h,home:home,tilt:tilt,phase:i*1.7,lift:0,sel:isSel?1:0,dim:1});
     });
   });
   resize();
@@ -350,8 +369,7 @@ function loadFonts(){
   var all=S.topics.map(function(t){ return t.title+t.body; }).join('')+S.tags.map(function(t){ return t.name; }).join('')+S.members.map(function(m){ return m.name; }).join('')+'今天昨明日一二三四五六還有到期已讀留言全家都看過了沒未分類0123456789/:·…()';
   if(all===fontText) return; fontText=all;
   Promise.all([document.fonts.load('700 52px "LXGW WenKai TC"',all),document.fonts.load('400 28px "Noto Sans TC"',all),document.fonts.load('500 28px "Noto Sans TC"',all),document.fonts.load('700 28px "Noto Sans TC"',all)]).then(function(){
-    cards.forEach(function(c){ drawCard(c.t,c.cv); c.tex.needsUpdate=true; });
-    labels.forEach(function(l){ l.tex.image=labelCanvas(l.text); l.tex.needsUpdate=true; });
+    build();
   }).catch(function(){});
 }
 
@@ -366,7 +384,7 @@ function resize(){
   if(minX>maxX) minX=maxX=(LEFT+RIGHT)/2;
   targetX=clamp(targetX);
 }
-window.addEventListener('resize',resize);
+window.addEventListener('resize',function(){ var was=narrow; resize(); if(narrow!==was) build(); });
 
 var ray=new THREE.Raycaster(), v2=new THREE.Vector2();
 function pick(e){
@@ -505,7 +523,7 @@ function write(body,topicId,focusInput){
 
 /* ---------- 我是誰 ---------- */
 var whoDlg=$('whoDlg');
-function updateWho(){ $('whoBtn').textContent=me&&member(me)?'我是 '+memberName(me)+'(切換)':'選擇我是誰'; }
+function updateWho(){ $('whoBtn').textContent=me&&member(me)?'我是 '+memberName(me):'選擇我是誰'; }
 function askWho(){
   var list=$('whoList'); list.textContent='';
   S.members.forEach(function(m){
@@ -599,7 +617,7 @@ function frame(){
   for(var i=0;i<cards.length;i++){
     var c=cards[i], isSel=i===selected, on=visible(i);
     c.sel+=((isSel?1:0)-c.sel)*k; c.lift+=((i===hover&&!isSel?1:0)-c.lift)*k; c.dim+=((on?1:.18)-c.dim)*k;
-    if(narrow) tmp.set(camX,2.45,1.5); else tmp.set(camX-1.9,1.2,4.4);
+    if(narrow) tmp.set(camX,1.6,5.0); else tmp.set(camX-1.9,1.2,4.4);
     var s=c.sel, g=c.group;
     g.position.x=c.home.x+(tmp.x-c.home.x)*s;
     g.position.y=c.home.y+(tmp.y-c.home.y)*s;
@@ -609,6 +627,7 @@ function frame(){
     g.rotation.z=c.tilt*(1-s)+(reduce?0:Math.sin(time*.6+c.phase)*.006*(1-s));
     var sc2=1+c.lift*.04+s*(narrow?0:.12); g.scale.set(sc2,sc2,1);
     c.mat.opacity=c.dim; c.mesh.castShadow=c.dim>.5;
+    if(c.strip){ c.strip.tex.offset.x=(time*80/c.strip.texW)%1; c.strip.mesh.material.opacity=c.dim; }
   }
   renderer.render(scene,camera);
   requestAnimationFrame(frame);
